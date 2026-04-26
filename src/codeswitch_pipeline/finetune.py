@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 
 import torch
@@ -69,22 +70,27 @@ def finetune_spanglish_adapter(
         )
 
     tokenized = dataset.map(tokenize, batched=True, remove_columns=["text"])
-    training_args = TrainingArguments(
-        output_dir=str(output_path),
-        overwrite_output_dir=False,
-        learning_rate=config.learning_rate,
-        num_train_epochs=config.num_train_epochs,
-        per_device_train_batch_size=config.per_device_train_batch_size,
-        gradient_accumulation_steps=config.gradient_accumulation_steps,
-        logging_steps=config.logging_steps,
-        save_strategy=config.save_strategy,
-        save_steps=config.save_steps,
-        save_total_limit=config.save_total_limit,
-        report_to="none",
-        fp16=torch.cuda.is_available(),
-        bf16=False,
-        save_safetensors=True,
-    )
+    training_arg_values = {
+        "output_dir": str(output_path),
+        "overwrite_output_dir": False,
+        "learning_rate": config.learning_rate,
+        "num_train_epochs": config.num_train_epochs,
+        "per_device_train_batch_size": config.per_device_train_batch_size,
+        "gradient_accumulation_steps": config.gradient_accumulation_steps,
+        "logging_steps": config.logging_steps,
+        "save_strategy": config.save_strategy,
+        "save_steps": config.save_steps,
+        "save_total_limit": config.save_total_limit,
+        "report_to": "none",
+        "fp16": torch.cuda.is_available(),
+        "bf16": False,
+        "save_safetensors": True,
+    }
+    supported_args = set(inspect.signature(TrainingArguments.__init__).parameters.keys())
+    filtered_training_args = {
+        key: value for key, value in training_arg_values.items() if key in supported_args
+    }
+    training_args = TrainingArguments(**filtered_training_args)
 
     trainer = Trainer(
         model=model,
