@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 from datasets import concatenate_datasets, load_dataset
 
+from .cleaning import clean_generation_text, clean_spanglish_social_text, is_usable_clean_text
 from .text_utils import join_tokens, normalize_whitespace, parse_array_string
 
 
@@ -30,8 +31,8 @@ def load_multiwoz_pairs(
             next_turn = turns[turn_index + 1]
             if current_turn.get("speaker") != "USER" or next_turn.get("speaker") != "SYSTEM":
                 continue
-            prompt = normalize_whitespace(current_turn.get("utterance", ""))
-            reply = normalize_whitespace(next_turn.get("utterance", ""))
+            prompt = clean_generation_text(normalize_whitespace(current_turn.get("utterance", "")))
+            reply = clean_generation_text(normalize_whitespace(next_turn.get("utterance", "")))
             if not prompt or not reply:
                 continue
             rows.append(
@@ -68,13 +69,22 @@ def save_control_dataset(frame: pd.DataFrame, output_path: str | Path) -> Path:
 
 def load_spanglish_corpus(csv_paths: Iterable[str | Path], text_limit: int | None = None) -> list[str]:
     texts: list[str] = []
+    seen: set[str] = set()
     for csv_path in csv_paths:
         frame = pd.read_csv(csv_path)
         for raw_words in frame["words"].fillna(""):
             tokens = parse_array_string(raw_words)
-            text = normalize_whitespace(join_tokens(tokens))
-            if text:
+            text = clean_spanglish_social_text(normalize_whitespace(join_tokens(tokens)))
+            if text and is_usable_clean_text(text) and text not in seen:
                 texts.append(text)
+                seen.add(text)
             if text_limit is not None and len(texts) >= text_limit:
                 return texts
     return texts
+
+
+def save_cleaned_spanglish_corpus(texts: list[str], output_path: str | Path) -> Path:
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"text": texts}).to_csv(output, index=False)
+    return output

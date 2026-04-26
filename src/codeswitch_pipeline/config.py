@@ -22,11 +22,11 @@ class DatasetConfig:
         ]
     )
     control_output_csv: str = "outputs/datasets/control_eng.csv"
+    cleaned_spanglish_output_csv: str = "outputs/datasets/cleaned_spanglish_corpus.csv"
 
 
 @dataclass
 class GenerationConfig:
-    candidate_pool_size: int = 500
     final_target_size: int = 300
     switch_ratios: list[float] = field(default_factory=lambda: [0.10, 0.25, 0.50, 0.75])
     switch_types: list[str] = field(default_factory=lambda: ["intra-sentential", "inter-sentential"])
@@ -111,3 +111,16 @@ def load_config(path: str | Path) -> PipelineConfig:
         judge=_merge_dataclass(JudgeConfig, raw.get("judge")),
         evaluation=_merge_dataclass(EvaluationConfig, raw.get("evaluation")),
     )
+
+
+def apply_runtime_overrides(
+    config: PipelineConfig,
+    num_samples: int | None = None,
+) -> PipelineConfig:
+    if num_samples is not None:
+        if num_samples <= 0:
+            raise ValueError(f"num_samples must be positive. Got {num_samples}.")
+        config.datasets.sample_size = num_samples
+        config.generation.final_target_size = num_samples
+
+    return config

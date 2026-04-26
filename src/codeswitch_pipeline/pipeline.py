@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .config import PipelineConfig, load_config
-from .data_sources import load_multiwoz_pairs, load_spanglish_corpus, save_control_dataset
+from .config import PipelineConfig, apply_runtime_overrides, load_config
+from .data_sources import load_multiwoz_pairs, load_spanglish_corpus, save_cleaned_spanglish_corpus, save_control_dataset
 from .evaluation import evaluate_models_on_datasets
 from .finetune import finetune_spanglish_adapter
 from .generation import HFRewriteGenerator, build_codeswitch_dataset
@@ -13,8 +13,16 @@ from .metrics import LanguageIdentifier
 from .text_utils import set_seed
 
 
-def run_stage(stage: str, config_path: str | Path = "configs/pipeline.yaml") -> None:
+def run_stage(
+    stage: str,
+    config_path: str | Path = "configs/pipeline.yaml",
+    num_samples: int | None = None,
+) -> None:
     config = load_config(config_path)
+    config = apply_runtime_overrides(
+        config,
+        num_samples=num_samples,
+    )
     set_seed(config.datasets.seed)
     ensure_output_dirs(config)
     if config.datasets.sample_size != config.generation.final_target_size:
@@ -41,6 +49,7 @@ def run_stage(stage: str, config_path: str | Path = "configs/pipeline.yaml") -> 
             [config.resolve(path) for path in config.datasets.spanglish_paths],
             text_limit=config.finetune.train_text_limit,
         )
+        save_cleaned_spanglish_corpus(natural_texts, config.resolve(config.datasets.cleaned_spanglish_output_csv))
         language_identifier = LanguageIdentifier(translation_lexicon=lexicon.token_map)
         prompt_judge = PromptJudge(
             model_name=config.judge.xlmr_model,
@@ -67,7 +76,6 @@ def run_stage(stage: str, config_path: str | Path = "configs/pipeline.yaml") -> 
                 natural_texts=natural_texts,
                 language_identifier=language_identifier,
                 max_attempts_per_prompt=config.generation.max_attempts_per_prompt,
-                candidate_pool_size=config.generation.candidate_pool_size,
                 seed=config.datasets.seed,
                 dataset_name="unfinetuned_engesp",
                 require_score_five=config.judge.accept_only_score_five,
@@ -99,7 +107,6 @@ def run_stage(stage: str, config_path: str | Path = "configs/pipeline.yaml") -> 
                 natural_texts=natural_texts,
                 language_identifier=language_identifier,
                 max_attempts_per_prompt=config.generation.max_attempts_per_prompt,
-                candidate_pool_size=config.generation.candidate_pool_size,
                 seed=config.datasets.seed + 1,
                 dataset_name="finetuned_engesp",
                 require_score_five=config.judge.accept_only_score_five,
@@ -128,6 +135,7 @@ def run_stage(stage: str, config_path: str | Path = "configs/pipeline.yaml") -> 
 def ensure_output_dirs(config: PipelineConfig) -> None:
     paths = [
         config.resolve(config.datasets.control_output_csv).parent,
+        config.resolve(config.datasets.cleaned_spanglish_output_csv).parent,
         config.resolve(config.generation.unfinetuned_output_csv).parent,
         config.resolve(config.evaluation.output_raw_csv).parent,
         config.resolve(config.finetune.adapter_output_dir),

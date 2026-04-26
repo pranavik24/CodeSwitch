@@ -18,8 +18,18 @@ def main() -> None:
         default="configs/pipeline.yaml",
         help="Path to the pipeline YAML config.",
     )
+    parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=None,
+        help="Override the number of sampled prompts and final generated examples per dataset.",
+    )
     args = parser.parse_args()
-    run_stage(stage=args.stage, config_path=args.config)
+    run_stage(
+        stage=args.stage,
+        config_path=args.config,
+        num_samples=args.num_samples,
+    )
 
 
 if __name__ == "__main__":

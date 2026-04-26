@@ -13,6 +13,7 @@ This project scaffolds an end-to-end pipeline for:
 The pipeline writes the files below:
 
 - `outputs/datasets/control_eng.csv`
+- `outputs/datasets/cleaned_spanglish_corpus.csv`
 - `outputs/datasets/unfinetuned_engesp.csv`
 - `outputs/datasets/finetuned_engesp.csv`
 - `outputs/datasets/unfinetuned_candidates.csv`
@@ -62,13 +63,16 @@ The sampler loads `pfb30/multi_woz_v22` with Hugging Face `datasets`, extracts `
 - Balances prompts across:
   - `10%`, `25%`, `50%`, `75%` Spanish token targets
   - `intra-sentential` and `inter-sentential` switching
-- Generates a candidate pool of at least 500 rewrites.
+- Uses only the same sampled control prompts as the source pool. No extra prompt pool is added on top.
 - Scores each rewrite with an XLM-R based rubric judge.
 - Accepts only score-5 prompts when `judge.accept_only_score_five: true`.
+- The final dataset rows stay aligned to the control set. The `*_candidates.csv` files are retry logs, so they may contain multiple attempts for the same control prompt.
 
 ### Dataset 2: `finetuned_engesp.csv`
 
 - Fine-tunes the base generator with LoRA on the raw Spanglish text in `dataset/spanish_texts/*.csv`.
+- Cleans the Spanglish corpus first by removing mentions, URLs, emojis, repeated punctuation noise, and duplicate lines.
+- Saves the cleaned fine-tuning text to `outputs/datasets/cleaned_spanglish_corpus.csv`.
 - Reuses the same 300 sampled prompts and the same switch-balance targets.
 - Applies the same 500-candidate generation and score-5 filtering flow.
 
@@ -109,6 +113,12 @@ Run the full pipeline:
 
 ```bash
 PYTHONPATH=src python scripts/run_pipeline.py --stage all
+```
+
+Override the number of generated samples:
+
+```bash
+PYTHONPATH=src python scripts/run_pipeline.py --stage all --num-samples 100
 ```
 
 Run only dataset generation:

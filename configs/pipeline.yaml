@@ -14,9 +14,9 @@ datasets:
     - dataset/spanish_texts/lid_spaeng_validation.csv
     - dataset/spanish_texts/lid_spaeng_test.csv
   control_output_csv: outputs/datasets/control_eng.csv
+  cleaned_spanglish_output_csv: outputs/datasets/cleaned_spanglish_corpus.csv
 
 generation:
-  candidate_pool_size: 500
   final_target_size: 300
   switch_ratios:
     - 0.10

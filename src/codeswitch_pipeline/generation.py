@@ -10,6 +10,7 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
+from .cleaning import clean_generation_text
 from .judge import PromptJudge
 from .lexicon import TranslationLexicon
 from .metrics import LanguageIdentifier
@@ -112,7 +113,7 @@ class HFRewriteGenerator:
     def _clean_generation(self, raw_text: str, original_prompt: str) -> str:
         first_line = normalize_whitespace(raw_text.splitlines()[0] if raw_text.strip() else "")
         cleaned = re.sub(r"^(assistant:|rewrite:)\s*", "", first_line, flags=re.IGNORECASE)
-        cleaned = cleaned.strip(' "\'')
+        cleaned = clean_generation_text(cleaned)
         return cleaned or original_prompt
 
     def _generate_from_messages(self, messages: list[dict[str, str]], temperature: float) -> str:
@@ -170,7 +171,7 @@ def lexical_rewrite(
             text += token
         else:
             text += " " + token
-    return normalize_whitespace(text)
+    return clean_generation_text(text)
 
 
 def build_codeswitch_dataset(
@@ -183,7 +184,6 @@ def build_codeswitch_dataset(
     natural_texts: list[str],
     language_identifier: LanguageIdentifier,
     max_attempts_per_prompt: int,
-    candidate_pool_size: int,
     seed: int,
     dataset_name: str,
     require_score_five: bool = True,
@@ -247,34 +247,6 @@ def build_codeswitch_dataset(
                 accepted_rows.append(best_candidate)
             else:
                 failed_sample_ids.append(str(row["sample_id"]))
-
-    while len(candidate_rows) < candidate_pool_size and not frame.empty:
-        row = frame.sample(n=1, random_state=rng.randint(0, 10_000_000)).to_dict(orient="records")[0]
-        prompt = str(row["prompt"])
-        switch_type = str(row["switch_type"])
-        target_ratio = float(row["target_spanish_ratio"])
-        hints = lexicon.candidates_for_text(prompt)
-        examples = rng.sample(natural_texts, k=min(2, len(natural_texts))) if natural_texts else []
-        if generator is not None:
-            try:
-                rewritten = generator.rewrite(prompt, switch_type, target_ratio, hints, examples)
-            except Exception:
-                rewritten = lexical_rewrite(prompt, switch_type, target_ratio, lexicon)
-        else:
-            rewritten = lexical_rewrite(prompt, switch_type, target_ratio, lexicon)
-        judged = judge.score_prompt(prompt, rewritten, target_ratio, switch_type)
-        candidate_rows.append(
-            {
-                **row,
-                "dataset_name": dataset_name,
-                "attempt": 1000 + len(candidate_rows),
-                "original_prompt": prompt,
-                "rewritten_prompt": rewritten,
-                "observed_spanish_ratio": judged.observed_spanish_ratio,
-                "observed_switch_type": judged.observed_switch_type,
-                **asdict(judged),
-            }
-        )
 
     accepted = pd.DataFrame(accepted_rows)
     if failed_sample_ids:
