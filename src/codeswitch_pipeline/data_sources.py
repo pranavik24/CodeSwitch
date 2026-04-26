@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
-from datasets import concatenate_datasets, load_dataset
+from datasets import Dataset, concatenate_datasets, load_dataset
 
 from .cleaning import clean_generation_text, clean_spanglish_social_text, is_usable_clean_text
 from .text_utils import join_tokens, normalize_whitespace, parse_array_string
@@ -68,20 +68,53 @@ def _load_multiwoz_from_parquet(dataset_id: str, splits: list[str]) -> list:
     last_error: Exception | None = None
 
     for config_dir in config_dirs:
-        try:
-            datasets_by_split = []
-            for split in splits:
-                file_name = f"multi_woz_v22-{split}.parquet"
-                url = f"https://huggingface.co/datasets/{dataset_id}/resolve/main/{config_dir}/{file_name}"
-                datasets_by_split.append(load_dataset("parquet", data_files={split: url}, split=split))
+        datasets_by_split: list = []
+        config_failed = False
+        for split in splits:
+            split_candidates = _multiwoz_parquet_candidates(
+                dataset_id=dataset_id,
+                config_dir=config_dir,
+                split=split,
+            )
+            dataset_for_split = None
+            split_error: Exception | None = None
+            for candidate in split_candidates:
+                try:
+                    dataset_for_split = load_dataset("parquet", data_files=[candidate], split="train")
+                    break
+                except Exception as exc:
+                    split_error = exc
+                    try:
+                        frame = pd.read_parquet(candidate)
+                        dataset_for_split = Dataset.from_pandas(frame, preserve_index=False)
+                        break
+                    except Exception as pandas_exc:
+                        split_error = pandas_exc
+            if dataset_for_split is None:
+                last_error = split_error
+                config_failed = True
+                break
+            datasets_by_split.append(dataset_for_split)
+
+        if not config_failed and len(datasets_by_split) == len(splits):
             return datasets_by_split
-        except Exception as exc:
-            last_error = exc
 
     raise RuntimeError(
         "Unable to load MultiWOZ from standard Parquet files. "
-        "Tried the Hugging Face Parquet exports under 'v2.2' and 'v2.2_active_only'."
+        "Tried the Hugging Face Parquet exports under 'v2.2' and 'v2.2_active_only', "
+        "including the converted Parquet branch."
     ) from last_error
+
+
+def _multiwoz_parquet_candidates(dataset_id: str, config_dir: str, split: str) -> list[str]:
+    file_name = f"multi_woz_v22-{split}.parquet"
+    branch = "refs%2Fconvert%2Fparquet"
+    return [
+        f"https://huggingface.co/datasets/{dataset_id}/resolve/main/{config_dir}/{file_name}",
+        f"https://huggingface.co/datasets/{dataset_id}/resolve/{branch}/{config_dir}/{file_name}",
+        f"https://huggingface.co/datasets/{dataset_id}/resolve/{branch}/{config_dir}/{split}/0000.parquet",
+        f"hf://datasets/{dataset_id}@refs/convert/parquet/{config_dir}/{split}/0000.parquet",
+    ]
 
 
 def save_control_dataset(frame: pd.DataFrame, output_path: str | Path) -> Path:
