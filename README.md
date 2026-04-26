@@ -100,6 +100,7 @@ Metrics included:
 - The `LinCE-style` score here is a practical code-switch diagnostic built around token-level language ID and switch behavior. It is not the official LinCE shared-task benchmark score, because official LinCE evaluation requires task-specific gold labels.
 - The default Llama models in the config are Hugging Face gated models. In Colab, log in with a Hugging Face token before running evaluation or switch to ungated alternatives.
 - The XLM-R judge is a multilingual semantic scorer plus code-switch heuristics, not a generative judge.
+- Recent versions of `datasets` no longer support script-based dataset loaders. This pipeline automatically falls back to the standard Parquet exports for `pfb30/multi_woz_v22` when that happens.
 
 ## Running Locally Or In Colab
 

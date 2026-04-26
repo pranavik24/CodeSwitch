@@ -16,9 +16,7 @@ def load_multiwoz_pairs(
     sample_size: int,
     seed: int,
 ) -> pd.DataFrame:
-    datasets_by_split = [
-        load_dataset(dataset_id, split=split, trust_remote_code=True) for split in splits
-    ]
+    datasets_by_split = _load_multiwoz_dataset(dataset_id=dataset_id, splits=splits)
     dataset = concatenate_datasets(datasets_by_split)
 
     rows: list[dict[str, object]] = []
@@ -52,6 +50,38 @@ def load_multiwoz_pairs(
 
     frame = pd.DataFrame(rows)
     return frame.sample(n=sample_size, random_state=seed).reset_index(drop=True)
+
+
+def _load_multiwoz_dataset(dataset_id: str, splits: Iterable[str]) -> list:
+    split_list = list(splits)
+    try:
+        return [load_dataset(dataset_id, split=split) for split in split_list]
+    except RuntimeError as exc:
+        message = str(exc)
+        if "Dataset scripts are no longer supported" not in message:
+            raise
+        return _load_multiwoz_from_parquet(dataset_id=dataset_id, splits=split_list)
+
+
+def _load_multiwoz_from_parquet(dataset_id: str, splits: list[str]) -> list:
+    config_dirs = ["v2.2", "v2.2_active_only"]
+    last_error: Exception | None = None
+
+    for config_dir in config_dirs:
+        try:
+            datasets_by_split = []
+            for split in splits:
+                file_name = f"multi_woz_v22-{split}.parquet"
+                url = f"https://huggingface.co/datasets/{dataset_id}/resolve/main/{config_dir}/{file_name}"
+                datasets_by_split.append(load_dataset("parquet", data_files={split: url}, split=split))
+            return datasets_by_split
+        except Exception as exc:
+            last_error = exc
+
+    raise RuntimeError(
+        "Unable to load MultiWOZ from standard Parquet files. "
+        "Tried the Hugging Face Parquet exports under 'v2.2' and 'v2.2_active_only'."
+    ) from last_error
 
 
 def save_control_dataset(frame: pd.DataFrame, output_path: str | Path) -> Path:
