@@ -1,0 +1,13 @@
+accelerate>=1.0.0
+bitsandbytes>=0.43.0
+codeswitch>=1.1
+datasets>=3.0.0
+huggingface_hub>=0.25.0
+numpy>=1.26.0
+pandas>=2.2.0
+peft>=0.13.0
+pyyaml>=6.0.2
+rouge-score>=0.1.2
+sentencepiece>=0.2.0
+torch>=2.4.0
+transformers>=4.46.0
