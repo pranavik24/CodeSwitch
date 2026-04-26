@@ -54,6 +54,11 @@ finetune:
   lora_alpha: 32
   lora_dropout: 0.05
   train_text_limit: 12000
+  save_strategy: steps
+  save_steps: 100
+  save_total_limit: 3
+  logging_steps: 10
+  resume_from_checkpoint: true
 
 judge:
   xlmr_model: FacebookAI/xlm-roberta-base

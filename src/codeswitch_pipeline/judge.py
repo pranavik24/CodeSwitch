@@ -113,6 +113,11 @@ class PromptJudge:
         realism = self._to_five_point(0.75 * similarity + 0.25 * punctuation_match)
         emotion = self._to_five_point(0.65 * similarity + 0.35 * punctuation_match)
         overall = int(round(np.mean([naturalness, code_switch, grammar, realism, emotion])))
+        if not observed_profile.has_codeswitch:
+            code_switch = 1
+            overall = min(overall, 2)
+        elif observed_switch_type != target_switch_type:
+            overall = min(overall, 4)
 
         return PromptJudgeResult(
             naturalness=naturalness,

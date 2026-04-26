@@ -63,6 +63,11 @@ class FineTuneConfig:
     lora_alpha: int = 32
     lora_dropout: float = 0.05
     train_text_limit: int | None = 12000
+    save_strategy: str = "steps"
+    save_steps: int = 100
+    save_total_limit: int = 3
+    logging_steps: int = 10
+    resume_from_checkpoint: bool = True
 
 
 @dataclass

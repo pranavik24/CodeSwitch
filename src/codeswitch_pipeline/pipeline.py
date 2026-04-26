@@ -43,22 +43,30 @@ def run_stage(
     else:
         base_samples = None
 
-    if stage in {"datasets", "all", "evaluate"}:
-        lexicon = TranslationLexicon.from_tatoeba(config.resolve(config.datasets.translation_path))
+    if stage in {"datasets", "all", "evaluate", "finetune"}:
         natural_texts = load_spanglish_corpus(
             [config.resolve(path) for path in config.datasets.spanglish_paths],
             text_limit=config.finetune.train_text_limit,
         )
         save_cleaned_spanglish_corpus(natural_texts, config.resolve(config.datasets.cleaned_spanglish_output_csv))
-        language_identifier = LanguageIdentifier(translation_lexicon=lexicon.token_map)
-        prompt_judge = PromptJudge(
-            model_name=config.judge.xlmr_model,
-            natural_reference_texts=natural_texts,
-            language_identifier=language_identifier,
-            reference_limit=config.judge.naturalness_reference_limit,
-        )
+
+        if stage in {"finetune", "datasets", "all"}:
+            adapter_path = finetune_spanglish_adapter(
+                base_model_name=config.generation.finetune_base_model,
+                texts=natural_texts,
+                output_dir=config.resolve(config.finetune.adapter_output_dir),
+                config=config.finetune,
+            )
 
         if stage in {"datasets", "all"}:
+            lexicon = TranslationLexicon.from_tatoeba(config.resolve(config.datasets.translation_path))
+            language_identifier = LanguageIdentifier(translation_lexicon=lexicon.token_map)
+            prompt_judge = PromptJudge(
+                model_name=config.judge.xlmr_model,
+                natural_reference_texts=natural_texts,
+                language_identifier=language_identifier,
+                reference_limit=config.judge.naturalness_reference_limit,
+            )
             base_generator = HFRewriteGenerator(
                 model_name=config.generation.base_generator_model,
                 max_new_tokens=config.generation.max_new_tokens,
@@ -83,12 +91,6 @@ def run_stage(
                 switch_ratios=config.generation.switch_ratios,
             )
 
-            adapter_path = finetune_spanglish_adapter(
-                base_model_name=config.generation.finetune_base_model,
-                texts=natural_texts,
-                output_dir=config.resolve(config.finetune.adapter_output_dir),
-                config=config.finetune,
-            )
             finetuned_generator = HFRewriteGenerator(
                 model_name=config.generation.finetune_base_model,
                 max_new_tokens=config.generation.max_new_tokens,
@@ -115,6 +117,8 @@ def run_stage(
             )
 
         if stage in {"evaluate", "all"}:
+            lexicon = TranslationLexicon.from_tatoeba(config.resolve(config.datasets.translation_path))
+            language_identifier = LanguageIdentifier(translation_lexicon=lexicon.token_map)
             response_judge = ResponseJudge(config.judge.xlmr_model, language_identifier)
             dataset_paths = [
                 config.resolve(config.datasets.control_output_csv),

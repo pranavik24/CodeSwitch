@@ -17,7 +17,7 @@ def main() -> None:
     parser.add_argument(
         "--stage",
         default="all",
-        choices=["sample", "datasets", "evaluate", "all"],
+        choices=["sample", "finetune", "datasets", "evaluate", "all"],
         help="Pipeline stage to run.",
     )
     parser.add_argument(

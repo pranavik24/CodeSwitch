@@ -49,7 +49,7 @@ class HFRewriteGenerator:
             model_name,
             device_map="auto" if torch.cuda.is_available() else None,
             quantization_config=quant_config,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
         )
         if adapter_path:
             self.model = PeftModel.from_pretrained(self.model, adapter_path)
@@ -221,6 +221,13 @@ def build_codeswitch_dataset(
             else:
                 rewritten = lexical_rewrite(prompt, switch_type, target_ratio, lexicon)
 
+            observed_profile = language_identifier.profile(rewritten)
+            if not observed_profile.has_codeswitch:
+                fallback_rewrite = lexical_rewrite(prompt, switch_type, target_ratio, lexicon)
+                fallback_profile = language_identifier.profile(fallback_rewrite)
+                if fallback_profile.has_codeswitch:
+                    rewritten = fallback_rewrite
+
             judged = judge.score_prompt(prompt, rewritten, target_ratio, switch_type)
             candidate = {
                 **row,
@@ -255,6 +262,7 @@ def build_codeswitch_dataset(
             "Some prompts never reached judge score 5. Increase max_attempts_per_prompt or adjust the generator. "
             f"Failed sample_ids: {', '.join(failed_sample_ids[:10])}"
         )
+    accepted = accepted.drop(columns=["prompt"], errors="ignore")
     accepted = accepted.rename(columns={"rewritten_prompt": "prompt"})
     accepted["lince_prompt_score"] = accepted.apply(
         lambda item: language_identifier.lince_style_score(

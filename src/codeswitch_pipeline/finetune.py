@@ -42,7 +42,7 @@ def finetune_spanglish_adapter(
         base_model_name,
         device_map="auto" if torch.cuda.is_available() else None,
         quantization_config=quant_config,
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
     )
 
     if torch.cuda.is_available():
@@ -71,16 +71,19 @@ def finetune_spanglish_adapter(
     tokenized = dataset.map(tokenize, batched=True, remove_columns=["text"])
     training_args = TrainingArguments(
         output_dir=str(output_path),
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
         learning_rate=config.learning_rate,
         num_train_epochs=config.num_train_epochs,
         per_device_train_batch_size=config.per_device_train_batch_size,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
-        logging_steps=10,
-        save_strategy="epoch",
+        logging_steps=config.logging_steps,
+        save_strategy=config.save_strategy,
+        save_steps=config.save_steps,
+        save_total_limit=config.save_total_limit,
         report_to="none",
         fp16=torch.cuda.is_available(),
         bf16=False,
+        save_safetensors=True,
     )
 
     trainer = Trainer(
@@ -89,7 +92,24 @@ def finetune_spanglish_adapter(
         train_dataset=tokenized,
         data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
     )
-    trainer.train()
+    resume_checkpoint = _latest_checkpoint(output_path) if config.resume_from_checkpoint else None
+    trainer.train(resume_from_checkpoint=str(resume_checkpoint) if resume_checkpoint else None)
     trainer.model.save_pretrained(output_path)
     tokenizer.save_pretrained(output_path)
     return output_path
+
+
+def _latest_checkpoint(output_dir: Path) -> Path | None:
+    checkpoints = []
+    for path in output_dir.glob("checkpoint-*"):
+        if not path.is_dir():
+            continue
+        try:
+            step = int(path.name.split("-")[-1])
+        except ValueError:
+            continue
+        checkpoints.append((step, path))
+    if not checkpoints:
+        return None
+    checkpoints.sort(key=lambda item: item[0])
+    return checkpoints[-1][1]

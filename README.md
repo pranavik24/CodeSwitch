@@ -128,11 +128,23 @@ Run only dataset generation:
 PYTHONPATH=src python scripts/run_pipeline.py --stage datasets
 ```
 
+Run only the LoRA fine-tuning stage:
+
+```bash
+PYTHONPATH=src python scripts/run_pipeline.py --stage finetune
+```
+
 Run only evaluation:
 
 ```bash
 PYTHONPATH=src python scripts/run_pipeline.py --stage evaluate
 ```
+
+## Fine-Tune Checkpointing
+
+- The fine-tune stage now saves checkpoints during training, not just at the end.
+- By default it saves every `100` steps and keeps the latest `3` checkpoints.
+- If the run stops, rerunning `--stage finetune` will resume automatically from the latest checkpoint in `outputs/models/spanglish_adapter/`.
 
 ## Sources
 
