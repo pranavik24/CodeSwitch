@@ -16,6 +16,56 @@ from .lexicon import TranslationLexicon
 from .metrics import LanguageIdentifier
 from .text_utils import balanced_assignments, normalize_whitespace, tokenize_text
 
+FIXED_REFERENCE_EXAMPLES: dict[str, list[dict[str, object]]] = {
+    "intra-sentential": [
+        {
+            "target_ratio": 0.10,
+            "text": "Hi, I need a hotel cerca del airport for tomorrow night.",
+        },
+        {
+            "target_ratio": 0.25,
+            "text": "Can you help me find a restaurant barato near downtown for dinner tonight?",
+        },
+        {
+            "target_ratio": 0.50,
+            "text": "I need un taxi para the train station at ocho because my friend llega tonight.",
+        },
+        {
+            "target_ratio": 0.75,
+            "text": "Necesito cambiar my reservation porque el check-in time es too late para mi familia.",
+        },
+    ],
+    "inter-sentential": [
+        {
+            "target_ratio": 0.10,
+            "text": "I need a taxi to the hospital. Por favor, send it as soon as you can.",
+        },
+        {
+            "target_ratio": 0.25,
+            "text": "Can you book a table for four tonight? Quiero que sea cerca del centro.",
+        },
+        {
+            "target_ratio": 0.50,
+            "text": "I need a hotel with free parking. Y tambien quiero desayuno incluido.",
+        },
+        {
+            "target_ratio": 0.75,
+            "text": "Necesito un restaurante para manana por la noche. It should still be close to the station.",
+        },
+    ],
+}
+
+SWITCH_TYPE_DEFINITIONS = {
+    "intra-sentential": (
+        "Mix English and Spanish within the same sentence or clause. "
+        "Both languages should appear inside a single sentence."
+    ),
+    "inter-sentential": (
+        "Switch languages across sentence boundaries. "
+        "Use at least two short sentences, with English dominant in one and Spanish dominant in another."
+    ),
+}
+
 
 class HFRewriteGenerator:
     def __init__(
@@ -94,20 +144,28 @@ class HFRewriteGenerator:
         examples: list[str],
     ) -> str:
         hints = ", ".join(f"{token} -> {'/'.join(candidates)}" for token, candidates in lexicon_hints.items()) or "No lexicon hints."
-        example_block = "\n".join(f"- {example}" for example in examples[:2]) or "- No extra examples."
+        fixed_examples = select_fixed_examples(switch_type=switch_type, target_ratio=target_ratio)
+        example_block = "\n".join(
+            f"- {example['text']} (target Spanish ratio: {int(float(example['target_ratio']) * 100)}%)"
+            for example in fixed_examples
+        )
         percentage = int(target_ratio * 100)
+        switch_definition = SWITCH_TYPE_DEFINITIONS.get(switch_type, "Use natural English-Spanish code-switching.")
         return (
             f"Rewrite the English prompt into natural Spanglish.\n"
             f"Prompt: {prompt}\n"
             f"Switch type: {switch_type}\n"
+            f"Switch type definition: {switch_definition}\n"
             f"Target Spanish token percentage: about {percentage}%\n"
             f"Lexicon hints: {hints}\n"
-            f"Natural Spanglish references:\n{example_block}\n"
+            f"Fixed high-quality Spanglish references:\n{example_block}\n"
             "Rules:\n"
             "1. Keep all factual constraints, slot values, places, numbers, and intents unchanged.\n"
             "2. Make the output sound like a real user request, not a literal translation.\n"
-            "3. Use only one line.\n"
-            "4. Do not explain the rewrite.\n"
+            "3. The output must contain both English and Spanish. Do not produce fully English or fully Spanish text.\n"
+            "4. Match the requested switch type closely.\n"
+            "5. Use only one line unless the switch type is inter-sentential.\n"
+            "6. Do not explain the rewrite.\n"
         )
 
     def _clean_generation(self, raw_text: str, original_prompt: str) -> str:
@@ -212,10 +270,9 @@ def build_codeswitch_dataset(
         best_candidate: dict[str, object] | None = None
 
         for attempt in range(1, max_attempts_per_prompt + 1):
-            examples = rng.sample(natural_texts, k=min(2, len(natural_texts))) if natural_texts else []
             if generator is not None:
                 try:
-                    rewritten = generator.rewrite(prompt, switch_type, target_ratio, hints, examples)
+                    rewritten = generator.rewrite(prompt, switch_type, target_ratio, hints, [])
                 except Exception:
                     rewritten = lexical_rewrite(prompt, switch_type, target_ratio, lexicon)
             else:
@@ -297,3 +354,14 @@ def build_codeswitch_dataset(
     accepted.to_csv(Path(output_csv), index=False)
     pd.DataFrame(candidate_rows).to_csv(Path(candidate_csv), index=False)
     return accepted
+
+
+def select_fixed_examples(switch_type: str, target_ratio: float) -> list[dict[str, object]]:
+    examples = FIXED_REFERENCE_EXAMPLES.get(switch_type, [])
+    if not examples:
+        return []
+    ranked = sorted(
+        examples,
+        key=lambda example: abs(float(example["target_ratio"]) - float(target_ratio)),
+    )
+    return ranked[:2]

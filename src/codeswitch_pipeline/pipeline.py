@@ -5,7 +5,7 @@ from pathlib import Path
 from .config import PipelineConfig, apply_runtime_overrides, load_config
 from .data_sources import load_multiwoz_pairs, load_spanglish_corpus, save_cleaned_spanglish_corpus, save_control_dataset
 from .evaluation import evaluate_models_on_datasets
-from .finetune import finetune_spanglish_adapter
+from .finetune import adapter_artifacts_exist, finetune_spanglish_adapter, resolve_adapter_output_dir
 from .generation import HFRewriteGenerator, build_codeswitch_dataset
 from .judge import PromptJudge, ResponseJudge
 from .lexicon import TranslationLexicon
@@ -51,12 +51,17 @@ def run_stage(
         save_cleaned_spanglish_corpus(natural_texts, config.resolve(config.datasets.cleaned_spanglish_output_csv))
 
         if stage in {"finetune", "datasets", "all"}:
-            adapter_path = finetune_spanglish_adapter(
-                base_model_name=config.generation.finetune_base_model,
-                texts=natural_texts,
-                output_dir=config.resolve(config.finetune.adapter_output_dir),
-                config=config.finetune,
+            adapter_path = resolve_adapter_output_dir(
+                config.resolve(config.finetune.adapter_output_dir),
+                config.generation.finetune_base_model,
             )
+            if stage == "finetune" or not adapter_artifacts_exist(adapter_path):
+                adapter_path = finetune_spanglish_adapter(
+                    base_model_name=config.generation.finetune_base_model,
+                    texts=natural_texts,
+                    output_dir=adapter_path,
+                    config=config.finetune,
+                )
 
         if stage in {"datasets", "all"}:
             lexicon = TranslationLexicon.from_tatoeba(config.resolve(config.datasets.translation_path))

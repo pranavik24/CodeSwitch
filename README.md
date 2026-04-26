@@ -59,7 +59,7 @@ The sampler loads `pfb30/multi_woz_v22` with Hugging Face `datasets`, extracts `
 ### Dataset 1: `unfinetuned_engesp.csv`
 
 - Uses the local English-Spanish translation corpus in `dataset/spa.txt` to build a lexical hint table.
-- Uses a lightweight instruction model to rewrite the 300 sampled English prompts into Spanglish.
+- Uses a larger Qwen instruction model to rewrite the 300 sampled English prompts into Spanglish.
 - Balances prompts across:
   - `10%`, `25%`, `50%`, `75%` Spanish token targets
   - `intra-sentential` and `inter-sentential` switching
@@ -144,7 +144,8 @@ PYTHONPATH=src python scripts/run_pipeline.py --stage evaluate
 
 - The fine-tune stage now saves checkpoints during training, not just at the end.
 - By default it saves every `100` steps and keeps the latest `3` checkpoints.
-- If the run stops, rerunning `--stage finetune` will resume automatically from the latest checkpoint in `outputs/models/spanglish_adapter/`.
+- If the run stops, rerunning `--stage finetune` will resume automatically from the latest checkpoint in the current model's adapter folder.
+- Adapters are now stored in model-specific subdirectories under `outputs/models/spanglish_adapter/`, so changing from one base model to another does not accidentally reuse incompatible LoRA weights.
 
 ## Sources
 

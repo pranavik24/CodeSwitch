@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import json
+import re
 from pathlib import Path
 
 import torch
@@ -105,6 +107,35 @@ def finetune_spanglish_adapter(
     return output_path
 
 
+def adapter_artifacts_exist(output_dir: str | Path) -> bool:
+    output_path = Path(output_dir)
+    required = [
+        output_path / "adapter_config.json",
+        output_path / "adapter_model.safetensors",
+    ]
+    return all(path.exists() for path in required)
+
+
+def adapter_matches_base_model(output_dir: str | Path, base_model_name: str) -> bool:
+    config_path = Path(output_dir) / "adapter_config.json"
+    if not config_path.exists():
+        return False
+    try:
+        with config_path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception:
+        return False
+    saved_base = str(data.get("base_model_name_or_path", "")).strip()
+    return saved_base == base_model_name
+
+
+def resolve_adapter_output_dir(output_dir: str | Path, base_model_name: str) -> Path:
+    base_path = Path(output_dir)
+    if adapter_artifacts_exist(base_path) and adapter_matches_base_model(base_path, base_model_name):
+        return base_path
+    return base_path / _model_slug(base_model_name)
+
+
 def _latest_checkpoint(output_dir: Path) -> Path | None:
     checkpoints = []
     for path in output_dir.glob("checkpoint-*"):
@@ -119,3 +150,9 @@ def _latest_checkpoint(output_dir: Path) -> Path | None:
         return None
     checkpoints.sort(key=lambda item: item[0])
     return checkpoints[-1][1]
+
+
+def _model_slug(model_name: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", model_name.strip())
+    slug = slug.strip("-").lower()
+    return slug or "model"
