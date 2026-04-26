@@ -23,7 +23,7 @@ def load_multiwoz_pairs(
     for dialogue in dataset:
         dialogue_id = dialogue.get("dialogue_id", "")
         services = "|".join(dialogue.get("services", []))
-        turns = dialogue.get("turns", [])
+        turns = _normalize_turns(dialogue.get("turns", []))
         for turn_index in range(len(turns) - 1):
             current_turn = turns[turn_index]
             next_turn = turns[turn_index + 1]
@@ -50,6 +50,39 @@ def load_multiwoz_pairs(
 
     frame = pd.DataFrame(rows)
     return frame.sample(n=sample_size, random_state=seed).reset_index(drop=True)
+
+
+def _normalize_turns(turns: object) -> list[dict[str, object]]:
+    if isinstance(turns, list):
+        return [turn for turn in turns if isinstance(turn, dict)]
+
+    if isinstance(turns, dict):
+        keys = list(turns.keys())
+        if not keys:
+            return []
+
+        lengths: list[int] = []
+        for key in keys:
+            value = turns.get(key)
+            if isinstance(value, list):
+                lengths.append(len(value))
+        if not lengths:
+            return []
+
+        normalized: list[dict[str, object]] = []
+        total_turns = max(lengths)
+        for index in range(total_turns):
+            turn: dict[str, object] = {}
+            for key in keys:
+                value = turns.get(key)
+                if isinstance(value, list):
+                    turn[key] = value[index] if index < len(value) else None
+                else:
+                    turn[key] = value
+            normalized.append(turn)
+        return normalized
+
+    return []
 
 
 def _load_multiwoz_dataset(dataset_id: str, splits: Iterable[str]) -> list:
