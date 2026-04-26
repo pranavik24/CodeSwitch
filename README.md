@@ -59,7 +59,7 @@ The sampler loads `pfb30/multi_woz_v22` with Hugging Face `datasets`, extracts `
 ### Dataset 1: `unfinetuned_engesp.csv`
 
 - Uses the local English-Spanish translation corpus in `dataset/spa.txt` to build a lexical hint table.
-- Uses a smaller Qwen instruction model to rewrite the 300 sampled English prompts into Spanglish.
+- Uses a larger Qwen instruction model to rewrite the 300 sampled English prompts into Spanglish.
 - Balances prompts across:
   - `10%`, `25%`, `50%`, `75%` Spanish token targets
   - `intra-sentential` and `inter-sentential` switching
