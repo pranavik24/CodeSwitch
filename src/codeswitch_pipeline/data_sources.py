@@ -20,24 +20,36 @@ def load_multiwoz_pairs(
     dataset = concatenate_datasets(datasets_by_split)
 
     rows: list[dict[str, object]] = []
+    debug_samples: list[dict[str, object]] = []
     for dialogue in dataset:
         dialogue_id = dialogue.get("dialogue_id", "")
         services = "|".join(dialogue.get("services", []))
         turns = _normalize_turns(dialogue.get("turns", []))
+        if turns and len(debug_samples) < 3:
+            debug_samples.append(
+                {
+                    "dialogue_id": dialogue_id,
+                    "turn_count": len(turns),
+                    "first_speakers": [_normalize_speaker(turn.get("speaker")) for turn in turns[:4]],
+                    "first_utterances": [_stringify_value(turn.get("utterance", ""))[:80] for turn in turns[:2]],
+                }
+            )
         for turn_index in range(len(turns) - 1):
             current_turn = turns[turn_index]
             next_turn = turns[turn_index + 1]
-            if current_turn.get("speaker") != "USER" or next_turn.get("speaker") != "SYSTEM":
+            if _normalize_speaker(current_turn.get("speaker")) != "USER":
                 continue
-            prompt = clean_generation_text(normalize_whitespace(current_turn.get("utterance", "")))
-            reply = clean_generation_text(normalize_whitespace(next_turn.get("utterance", "")))
+            if _normalize_speaker(next_turn.get("speaker")) != "SYSTEM":
+                continue
+            prompt = clean_generation_text(normalize_whitespace(_stringify_value(current_turn.get("utterance", ""))))
+            reply = clean_generation_text(normalize_whitespace(_stringify_value(next_turn.get("utterance", ""))))
             if not prompt or not reply:
                 continue
             rows.append(
                 {
-                    "sample_id": f"{dialogue_id}_{current_turn.get('turn_id', turn_index)}",
+                    "sample_id": f"{dialogue_id}_{_stringify_value(current_turn.get('turn_id', turn_index))}",
                     "dialogue_id": dialogue_id,
-                    "turn_id": current_turn.get("turn_id", turn_index),
+                    "turn_id": _stringify_value(current_turn.get("turn_id", turn_index)),
                     "services": services,
                     "prompt": prompt,
                     "recommended_reply": reply,
@@ -46,15 +58,24 @@ def load_multiwoz_pairs(
             )
 
     if len(rows) < sample_size:
-        raise ValueError(f"Requested {sample_size} samples but only found {len(rows)} user/system pairs.")
+        raise ValueError(
+            f"Requested {sample_size} samples but only found {len(rows)} user/system pairs. "
+            f"Turn parsing diagnostics: {debug_samples}"
+        )
 
     frame = pd.DataFrame(rows)
     return frame.sample(n=sample_size, random_state=seed).reset_index(drop=True)
 
 
 def _normalize_turns(turns: object) -> list[dict[str, object]]:
+    turns = _unwrap_singleton(turns)
+
     if isinstance(turns, list):
-        return [turn for turn in turns if isinstance(turn, dict)]
+        normalized_list: list[dict[str, object]] = []
+        for turn in turns:
+            if isinstance(turn, dict):
+                normalized_list.append({key: _unwrap_singleton(value) for key, value in turn.items()})
+        return normalized_list
 
     if isinstance(turns, dict):
         keys = list(turns.keys())
@@ -74,15 +95,52 @@ def _normalize_turns(turns: object) -> list[dict[str, object]]:
         for index in range(total_turns):
             turn: dict[str, object] = {}
             for key in keys:
-                value = turns.get(key)
+                value = _unwrap_singleton(turns.get(key))
                 if isinstance(value, list):
-                    turn[key] = value[index] if index < len(value) else None
+                    turn[key] = _unwrap_singleton(value[index]) if index < len(value) else None
                 else:
-                    turn[key] = value
+                    turn[key] = _unwrap_singleton(value)
             normalized.append(turn)
         return normalized
 
     return []
+
+
+def _unwrap_singleton(value: object) -> object:
+    while True:
+        if isinstance(value, list) and len(value) == 1:
+            value = value[0]
+            continue
+        if isinstance(value, dict) and len(value) == 1:
+            only_value = next(iter(value.values()))
+            if isinstance(only_value, (list, dict, str, int, float, bool)) or only_value is None:
+                value = only_value
+                continue
+        break
+    return value
+
+
+def _stringify_value(value: object) -> str:
+    value = _unwrap_singleton(value)
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, list):
+        parts = [_stringify_value(item) for item in value]
+        return " ".join(part for part in parts if part)
+    return str(value)
+
+
+def _normalize_speaker(value: object) -> str:
+    normalized = _stringify_value(value).strip().upper()
+    if normalized in {"USER", "USR", "0"}:
+        return "USER"
+    if normalized in {"SYSTEM", "SYS", "1", "ASSISTANT"}:
+        return "SYSTEM"
+    return normalized
 
 
 def _load_multiwoz_dataset(dataset_id: str, splits: Iterable[str]) -> list:
