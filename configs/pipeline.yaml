@@ -30,8 +30,8 @@ generation:
   finetuned_output_csv: outputs/datasets/finetuned_engesp.csv
   unfinetuned_candidates_csv: outputs/datasets/unfinetuned_candidates.csv
   finetuned_candidates_csv: outputs/datasets/finetuned_candidates.csv
-  base_generator_model: Qwen/Qwen2.5-7B-Instruct
-  finetune_base_model: Qwen/Qwen2.5-7B-Instruct
+  base_generator_model: Qwen/Qwen2.5-1.5B-Instruct
+  finetune_base_model: Qwen/Qwen2.5-1.5B-Instruct
   eval_models:
     - Qwen/Qwen2.5-1.5B-Instruct
     - Qwen/Qwen2.5-3B-Instruct

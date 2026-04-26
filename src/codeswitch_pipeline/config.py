@@ -34,8 +34,8 @@ class GenerationConfig:
     finetuned_output_csv: str = "outputs/datasets/finetuned_engesp.csv"
     unfinetuned_candidates_csv: str = "outputs/datasets/unfinetuned_candidates.csv"
     finetuned_candidates_csv: str = "outputs/datasets/finetuned_candidates.csv"
-    base_generator_model: str = "Qwen/Qwen2.5-7B-Instruct"
-    finetune_base_model: str = "Qwen/Qwen2.5-7B-Instruct"
+    base_generator_model: str = "Qwen/Qwen2.5-1.5B-Instruct"
+    finetune_base_model: str = "Qwen/Qwen2.5-1.5B-Instruct"
     eval_models: list[str] = field(
         default_factory=lambda: [
             "Qwen/Qwen2.5-1.5B-Instruct",
