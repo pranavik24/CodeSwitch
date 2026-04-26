@@ -49,6 +49,8 @@ class GenerationConfig:
     temperature: float = 0.7
     top_p: float = 0.9
     quantize_4bit: bool = True
+    unfinetuned_min_overall_score: int = 4
+    finetuned_min_overall_score: int = 5
 
 
 @dataclass

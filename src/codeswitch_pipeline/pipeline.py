@@ -72,18 +72,11 @@ def run_stage(
                 language_identifier=language_identifier,
                 reference_limit=config.judge.naturalness_reference_limit,
             )
-            base_generator = HFRewriteGenerator(
-                model_name=config.generation.base_generator_model,
-                max_new_tokens=config.generation.max_new_tokens,
-                temperature=config.generation.temperature,
-                top_p=config.generation.top_p,
-                quantize_4bit=config.generation.quantize_4bit,
-            )
             build_codeswitch_dataset(
                 base_samples=base_samples,
                 output_csv=config.resolve(config.generation.unfinetuned_output_csv),
                 candidate_csv=config.resolve(config.generation.unfinetuned_candidates_csv),
-                generator=base_generator,
+                generator=None,
                 judge=prompt_judge,
                 lexicon=lexicon,
                 natural_texts=natural_texts,
@@ -91,7 +84,7 @@ def run_stage(
                 max_attempts_per_prompt=config.generation.max_attempts_per_prompt,
                 seed=config.datasets.seed,
                 dataset_name="unfinetuned_engesp",
-                require_score_five=config.judge.accept_only_score_five,
+                min_overall_score=config.generation.unfinetuned_min_overall_score,
                 switch_types=config.generation.switch_types,
                 switch_ratios=config.generation.switch_ratios,
             )
@@ -116,7 +109,7 @@ def run_stage(
                 max_attempts_per_prompt=config.generation.max_attempts_per_prompt,
                 seed=config.datasets.seed + 1,
                 dataset_name="finetuned_engesp",
-                require_score_five=config.judge.accept_only_score_five,
+                min_overall_score=config.generation.finetuned_min_overall_score,
                 switch_types=config.generation.switch_types,
                 switch_ratios=config.generation.switch_ratios,
             )

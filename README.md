@@ -59,13 +59,13 @@ The sampler loads `pfb30/multi_woz_v22` with Hugging Face `datasets`, extracts `
 ### Dataset 1: `unfinetuned_engesp.csv`
 
 - Uses the local English-Spanish translation corpus in `dataset/spa.txt` to build a lexical hint table.
-- Uses a larger Qwen instruction model to rewrite the 300 sampled English prompts into Spanglish.
+- Manually replaces English tokens with Spanish tokens to match the target Spanish ratio and requested switch type.
 - Balances prompts across:
   - `10%`, `25%`, `50%`, `75%` Spanish token targets
   - `intra-sentential` and `inter-sentential` switching
 - Uses only the same sampled control prompts as the source pool. No extra prompt pool is added on top.
 - Scores each rewrite with an XLM-R based rubric judge.
-- Accepts only score-5 prompts when `judge.accept_only_score_five: true`.
+- Accepts prompts with overall judge score `>= 4`.
 - The final dataset rows stay aligned to the control set. The `*_candidates.csv` files are retry logs, so they may contain multiple attempts for the same control prompt.
 
 ### Dataset 2: `finetuned_engesp.csv`
@@ -74,7 +74,7 @@ The sampler loads `pfb30/multi_woz_v22` with Hugging Face `datasets`, extracts `
 - Cleans the Spanglish corpus first by removing mentions, URLs, emojis, repeated punctuation noise, and duplicate lines.
 - Saves the cleaned fine-tuning text to `outputs/datasets/cleaned_spanglish_corpus.csv`.
 - Reuses the same 300 sampled prompts and the same switch-balance targets.
-- Applies the same 500-candidate generation and score-5 filtering flow.
+- Uses the fine-tuned LLM to generate code-switched prompts and accepts prompts with overall judge score `>= 5`.
 
 ### Dataset 3: `control_eng.csv`
 

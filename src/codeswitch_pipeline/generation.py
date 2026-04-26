@@ -199,27 +199,28 @@ def lexical_rewrite(
     lexicon: TranslationLexicon,
 ) -> str:
     tokens = tokenize_text(prompt)
-    alpha_indices = [idx for idx, token in enumerate(tokens) if token.isalpha() and lexicon.get(token)]
-    if not alpha_indices:
+    alpha_indices = [idx for idx, token in enumerate(tokens) if token.isalpha()]
+    candidate_indices = [idx for idx in alpha_indices if lexicon.get(tokens[idx])]
+    if not candidate_indices:
         return prompt
 
-    target_replacements = max(1, round(len([token for token in tokens if token.isalpha()]) * target_ratio))
-    if switch_type == "inter-sentential":
-        midpoint = len(alpha_indices) // 2
-        ordered = alpha_indices[midpoint:] + alpha_indices[:midpoint]
-    else:
-        ordered = alpha_indices
+    target_replacements = max(1, round(len(alpha_indices) * target_ratio))
+    target_replacements = min(target_replacements, len(candidate_indices))
 
+    ordered = _ordered_candidate_indices(tokens, candidate_indices, switch_type, target_replacements)
     replaced = 0
     for index in ordered:
         token = tokens[index]
         candidates = lexicon.get(token)
         if not candidates:
             continue
-        tokens[index] = candidates[0]
+        tokens[index] = _match_case(token, candidates[0])
         replaced += 1
         if replaced >= target_replacements:
             break
+
+    if switch_type == "inter-sentential":
+        tokens = _ensure_inter_sentential_shape(tokens)
 
     text = ""
     for token in tokens:
@@ -244,7 +245,7 @@ def build_codeswitch_dataset(
     max_attempts_per_prompt: int,
     seed: int,
     dataset_name: str,
-    require_score_five: bool = True,
+    min_overall_score: int,
     switch_types: list[str] | None = None,
     switch_ratios: list[float] | None = None,
 ) -> pd.DataFrame:
@@ -301,13 +302,13 @@ def build_codeswitch_dataset(
             if best_candidate is None or int(candidate["overall"]) > int(best_candidate["overall"]):
                 best_candidate = candidate
 
-            if (not require_score_five and int(candidate["overall"]) >= 4) or int(candidate["overall"]) == 5:
+            if int(candidate["overall"]) >= min_overall_score:
                 accepted_rows.append(candidate)
                 break
         else:
             if best_candidate is None:
                 failed_sample_ids.append(str(row["sample_id"]))
-            elif not require_score_five:
+            elif min_overall_score <= 4:
                 accepted_rows.append(best_candidate)
             else:
                 failed_sample_ids.append(str(row["sample_id"]))
@@ -316,7 +317,8 @@ def build_codeswitch_dataset(
     if failed_sample_ids:
         pd.DataFrame(candidate_rows).to_csv(Path(candidate_csv), index=False)
         raise ValueError(
-            "Some prompts never reached judge score 5. Increase max_attempts_per_prompt or adjust the generator. "
+            f"Some prompts never reached judge score {min_overall_score}. "
+            "Increase max_attempts_per_prompt or adjust the generator. "
             f"Failed sample_ids: {', '.join(failed_sample_ids[:10])}"
         )
     accepted = accepted.drop(columns=["prompt"], errors="ignore")
@@ -354,6 +356,97 @@ def build_codeswitch_dataset(
     accepted.to_csv(Path(output_csv), index=False)
     pd.DataFrame(candidate_rows).to_csv(Path(candidate_csv), index=False)
     return accepted
+
+
+def _match_case(source: str, target: str) -> str:
+    if source.isupper():
+        return target.upper()
+    if source[:1].isupper():
+        return target[:1].upper() + target[1:]
+    return target
+
+
+def _ordered_candidate_indices(
+    tokens: list[str],
+    candidate_indices: list[int],
+    switch_type: str,
+    target_replacements: int,
+) -> list[int]:
+    if switch_type != "inter-sentential":
+        return candidate_indices
+
+    sentence_groups = _sentence_candidate_groups(tokens, candidate_indices)
+    if len(sentence_groups) >= 2:
+        ranked_groups = sorted(
+            sentence_groups,
+            key=lambda group: abs(len(group) - target_replacements),
+        )
+        ordered: list[int] = []
+        for index in ranked_groups[0]:
+            ordered.append(index)
+        for group in sentence_groups:
+            if group is ranked_groups[0]:
+                continue
+            for index in group:
+                ordered.append(index)
+        return ordered
+    return candidate_indices
+
+
+def _sentence_candidate_groups(tokens: list[str], candidate_indices: list[int]) -> list[list[int]]:
+    groups: list[list[int]] = []
+    current: list[int] = []
+    candidate_set = set(candidate_indices)
+    for index, token in enumerate(tokens):
+        if index in candidate_set:
+            current.append(index)
+        if token in {".", "!", "?"}:
+            if current:
+                groups.append(current)
+                current = []
+    if current:
+        groups.append(current)
+    return groups
+
+
+def _ensure_inter_sentential_shape(tokens: list[str]) -> list[str]:
+    if any(token in {".", "!", "?"} for token in tokens[:-1]):
+        return tokens
+
+    split_markers = {",", "and", "but", "because", "so", "then"}
+    split_index = None
+    midpoint = len(tokens) // 2
+    for offset in range(len(tokens)):
+        left = midpoint - offset
+        right = midpoint + offset
+        for candidate in (left, right):
+            if 0 < candidate < len(tokens) - 1 and str(tokens[candidate]).lower() in split_markers:
+                split_index = candidate
+                break
+        if split_index is not None:
+            break
+
+    if split_index is None:
+        return tokens
+
+    new_tokens = tokens[:]
+    marker = new_tokens[split_index]
+    if str(marker).lower() == ",":
+        new_tokens[split_index] = "."
+    else:
+        new_tokens[split_index] = "."
+    next_index = split_index + 1
+    if next_index < len(new_tokens):
+        new_tokens[next_index] = _capitalize_token(new_tokens[next_index])
+    return new_tokens
+
+
+def _capitalize_token(token: str) -> str:
+    if not token:
+        return token
+    if token[0].isalpha():
+        return token[0].upper() + token[1:]
+    return token
 
 
 def select_fixed_examples(switch_type: str, target_ratio: float) -> list[dict[str, object]]:
