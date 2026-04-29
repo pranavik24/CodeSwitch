@@ -58,23 +58,24 @@ The sampler loads `pfb30/multi_woz_v22` with Hugging Face `datasets`, extracts `
 
 ### Dataset 1: `unfinetuned_engesp.csv`
 
-- Uses the local English-Spanish translation corpus in `dataset/spa.txt` to build a lexical hint table.
-- Manually replaces English tokens with Spanish tokens to match the target Spanish ratio and requested switch type.
+- Uses the configured base generator to rewrite prompts into natural English-Spanish code-switching.
+- Uses the local English-Spanish translation corpus in `dataset/spa.txt` to build lexical hints and a lexical fallback path.
 - Balances prompts across:
   - `10%`, `25%`, `50%`, `75%` Spanish token targets
   - `intra-sentential` and `inter-sentential` switching
 - Uses only the same sampled control prompts as the source pool. No extra prompt pool is added on top.
-- Scores each rewrite with an XLM-R based rubric judge.
-- Accepts prompts with overall judge score `>= 4`.
-- The final dataset rows stay aligned to the control set. The `*_candidates.csv` files are retry logs, so they may contain multiple attempts for the same control prompt.
+- Scores each rewrite with an XLM-R based rubric judge for analysis only.
+- Keeps the generated prompt regardless of judge score.
+- The final dataset rows stay aligned to the control set. The `*_candidates.csv` files are audit logs of the generated prompts and judge metadata.
 
 ### Dataset 2: `finetuned_engesp.csv`
 
-- Fine-tunes the base generator with LoRA on the raw Spanglish text in `dataset/spanish_texts/*.csv`.
+- Fine-tunes the configured Qwen 3 base generator with LoRA on the raw Spanglish text in `dataset/spanish_texts/*.csv`.
 - Cleans the Spanglish corpus first by removing mentions, URLs, emojis, repeated punctuation noise, and duplicate lines.
 - Saves the cleaned fine-tuning text to `outputs/datasets/cleaned_spanglish_corpus.csv`.
 - Reuses the same 300 sampled prompts and the same switch-balance targets.
-- Uses the fine-tuned LLM to generate code-switched prompts and accepts prompts with overall judge score `>= 5`.
+- Uses the fine-tuned LLM to generate code-switched prompts.
+- Keeps the generated prompt regardless of judge score.
 
 ### Dataset 3: `control_eng.csv`
 
@@ -98,7 +99,8 @@ Metrics included:
 ## Important Notes
 
 - The `LinCE-style` score here is a practical code-switch diagnostic built around token-level language ID and switch behavior. It is not the official LinCE shared-task benchmark score, because official LinCE evaluation requires task-specific gold labels.
-- The default Llama models in the config are Hugging Face gated models. In Colab, log in with a Hugging Face token before running evaluation or switch to ungated alternatives.
+- Qwen 3 support requires `transformers>=4.51.0`. Older versions can fail with `KeyError: 'qwen3'`.
+- The default Llama evaluation models in the config are Hugging Face gated models. In Colab, log in with a Hugging Face token before running evaluation or switch to ungated alternatives.
 - The XLM-R judge is a multilingual semantic scorer plus code-switch heuristics, not a generative judge.
 - Recent versions of `datasets` no longer support script-based dataset loaders. This pipeline automatically falls back to the standard Parquet exports for `pfb30/multi_woz_v22` when that happens.
 

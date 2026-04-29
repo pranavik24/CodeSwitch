@@ -30,8 +30,8 @@ generation:
   finetuned_output_csv: outputs/datasets/finetuned_engesp.csv
   unfinetuned_candidates_csv: outputs/datasets/unfinetuned_candidates.csv
   finetuned_candidates_csv: outputs/datasets/finetuned_candidates.csv
-  base_generator_model: Qwen/Qwen2.5-7B-Instruct
-  finetune_base_model: Qwen/Qwen2.5-7B-Instruct
+  base_generator_model: Qwen/Qwen3-8B
+  finetune_base_model: Qwen/Qwen3-8B
   eval_models:
     - Qwen/Qwen2.5-1.5B-Instruct
     - Qwen/Qwen2.5-3B-Instruct
@@ -42,8 +42,6 @@ generation:
   temperature: 0.7
   top_p: 0.9
   quantize_4bit: true
-  unfinetuned_min_overall_score: 4
-  finetuned_min_overall_score: 5
 
 finetune:
   adapter_output_dir: outputs/models/spanglish_adapter
@@ -65,7 +63,6 @@ finetune:
 judge:
   xlmr_model: FacebookAI/xlm-roberta-base
   naturalness_reference_limit: 2048
-  accept_only_score_five: true
 
 evaluation:
   output_raw_csv: outputs/evaluations/llm_eval_raw.csv

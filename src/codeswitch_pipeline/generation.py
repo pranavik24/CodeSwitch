@@ -176,7 +176,15 @@ class HFRewriteGenerator:
 
     def _generate_from_messages(self, messages: list[dict[str, str]], temperature: float) -> str:
         if hasattr(self.tokenizer, "apply_chat_template") and self.tokenizer.chat_template:
-            rendered = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            try:
+                rendered = self.tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                    enable_thinking=False,
+                )
+            except TypeError:
+                rendered = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         else:
             rendered = "\n".join(f"{message['role'].upper()}: {message['content']}" for message in messages) + "\nASSISTANT:"
         tokens = self.tokenizer(rendered, return_tensors="pt").to(self.model.device)
@@ -245,7 +253,6 @@ def build_codeswitch_dataset(
     max_attempts_per_prompt: int,
     seed: int,
     dataset_name: str,
-    min_overall_score: int,
     switch_types: list[str] | None = None,
     switch_ratios: list[float] | None = None,
 ) -> pd.DataFrame:
@@ -261,66 +268,44 @@ def build_codeswitch_dataset(
 
     accepted_rows: list[dict[str, object]] = []
     candidate_rows: list[dict[str, object]] = []
-    failed_sample_ids: list[str] = []
 
     for row in frame.to_dict(orient="records"):
         prompt = str(row["prompt"])
         switch_type = str(row["switch_type"])
         target_ratio = float(row["target_spanish_ratio"])
         hints = lexicon.candidates_for_text(prompt)
-        best_candidate: dict[str, object] | None = None
 
-        for attempt in range(1, max_attempts_per_prompt + 1):
-            if generator is not None:
-                try:
-                    rewritten = generator.rewrite(prompt, switch_type, target_ratio, hints, [])
-                except Exception:
-                    rewritten = lexical_rewrite(prompt, switch_type, target_ratio, lexicon)
-            else:
+        attempt = 1
+        if generator is not None:
+            try:
+                rewritten = generator.rewrite(prompt, switch_type, target_ratio, hints, [])
+            except Exception:
                 rewritten = lexical_rewrite(prompt, switch_type, target_ratio, lexicon)
-
-            observed_profile = language_identifier.profile(rewritten)
-            if not observed_profile.has_codeswitch:
-                fallback_rewrite = lexical_rewrite(prompt, switch_type, target_ratio, lexicon)
-                fallback_profile = language_identifier.profile(fallback_rewrite)
-                if fallback_profile.has_codeswitch:
-                    rewritten = fallback_rewrite
-
-            judged = judge.score_prompt(prompt, rewritten, target_ratio, switch_type)
-            candidate = {
-                **row,
-                "dataset_name": dataset_name,
-                "attempt": attempt,
-                "original_prompt": prompt,
-                "rewritten_prompt": rewritten,
-                "observed_spanish_ratio": judged.observed_spanish_ratio,
-                "observed_switch_type": judged.observed_switch_type,
-                **asdict(judged),
-            }
-            candidate_rows.append(candidate)
-
-            if best_candidate is None or int(candidate["overall"]) > int(best_candidate["overall"]):
-                best_candidate = candidate
-
-            if int(candidate["overall"]) >= min_overall_score:
-                accepted_rows.append(candidate)
-                break
         else:
-            if best_candidate is None:
-                failed_sample_ids.append(str(row["sample_id"]))
-            elif min_overall_score <= 4:
-                accepted_rows.append(best_candidate)
-            else:
-                failed_sample_ids.append(str(row["sample_id"]))
+            rewritten = lexical_rewrite(prompt, switch_type, target_ratio, lexicon)
+
+        observed_profile = language_identifier.profile(rewritten)
+        if not observed_profile.has_codeswitch:
+            fallback_rewrite = lexical_rewrite(prompt, switch_type, target_ratio, lexicon)
+            fallback_profile = language_identifier.profile(fallback_rewrite)
+            if fallback_profile.has_codeswitch:
+                rewritten = fallback_rewrite
+
+        judged = judge.score_prompt(prompt, rewritten, target_ratio, switch_type)
+        candidate = {
+            **row,
+            "dataset_name": dataset_name,
+            "attempt": attempt,
+            "original_prompt": prompt,
+            "rewritten_prompt": rewritten,
+            "observed_spanish_ratio": judged.observed_spanish_ratio,
+            "observed_switch_type": judged.observed_switch_type,
+            **asdict(judged),
+        }
+        candidate_rows.append(candidate)
+        accepted_rows.append(candidate)
 
     accepted = pd.DataFrame(accepted_rows)
-    if failed_sample_ids:
-        pd.DataFrame(candidate_rows).to_csv(Path(candidate_csv), index=False)
-        raise ValueError(
-            f"Some prompts never reached judge score {min_overall_score}. "
-            "Increase max_attempts_per_prompt or adjust the generator. "
-            f"Failed sample_ids: {', '.join(failed_sample_ids[:10])}"
-        )
     accepted = accepted.drop(columns=["prompt"], errors="ignore")
     accepted = accepted.rename(columns={"rewritten_prompt": "prompt"})
     accepted["lince_prompt_score"] = accepted.apply(

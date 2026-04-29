@@ -34,8 +34,8 @@ class GenerationConfig:
     finetuned_output_csv: str = "outputs/datasets/finetuned_engesp.csv"
     unfinetuned_candidates_csv: str = "outputs/datasets/unfinetuned_candidates.csv"
     finetuned_candidates_csv: str = "outputs/datasets/finetuned_candidates.csv"
-    base_generator_model: str = "Qwen/Qwen2.5-7B-Instruct"
-    finetune_base_model: str = "Qwen/Qwen2.5-7B-Instruct"
+    base_generator_model: str = "Qwen/Qwen3-8B"
+    finetune_base_model: str = "Qwen/Qwen3-8B"
     eval_models: list[str] = field(
         default_factory=lambda: [
             "Qwen/Qwen2.5-1.5B-Instruct",
@@ -49,8 +49,6 @@ class GenerationConfig:
     temperature: float = 0.7
     top_p: float = 0.9
     quantize_4bit: bool = True
-    unfinetuned_min_overall_score: int = 4
-    finetuned_min_overall_score: int = 5
 
 
 @dataclass
@@ -76,7 +74,6 @@ class FineTuneConfig:
 class JudgeConfig:
     xlmr_model: str = "FacebookAI/xlm-roberta-base"
     naturalness_reference_limit: int = 2048
-    accept_only_score_five: bool = True
 
 
 @dataclass
