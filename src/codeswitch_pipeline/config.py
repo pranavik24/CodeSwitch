@@ -40,8 +40,6 @@ class GenerationConfig:
         default_factory=lambda: [
             "Qwen/Qwen2.5-1.5B-Instruct",
             "Qwen/Qwen2.5-3B-Instruct",
-            "meta-llama/Llama-3.2-1B-Instruct",
-            "meta-llama/Llama-3.2-3B-Instruct",
         ]
     )
     max_attempts_per_prompt: int = 8
