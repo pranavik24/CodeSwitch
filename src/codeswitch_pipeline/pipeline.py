@@ -17,6 +17,7 @@ def run_stage(
     stage: str,
     config_path: str | Path = "configs/pipeline.yaml",
     num_samples: int | None = None,
+    eval_datasets: list[str] | None = None,
 ) -> None:
     config = load_config(config_path)
     config = apply_runtime_overrides(
@@ -123,11 +124,20 @@ def run_stage(
             lexicon = TranslationLexicon.from_tatoeba(config.resolve(config.datasets.translation_path))
             language_identifier = LanguageIdentifier(translation_lexicon=lexicon.token_map)
             response_judge = ResponseJudge(config.judge.xlmr_model, language_identifier)
-            dataset_paths = [
-                config.resolve(config.datasets.control_output_csv),
-                config.resolve(config.generation.unfinetuned_output_csv),
-                config.resolve(config.generation.finetuned_output_csv),
-            ]
+            available_dataset_paths = {
+                "control_eng": config.resolve(config.datasets.control_output_csv),
+                "unfinetuned_engesp": config.resolve(config.generation.unfinetuned_output_csv),
+                "finetuned_engesp": config.resolve(config.generation.finetuned_output_csv),
+            }
+            selected_dataset_names = eval_datasets or list(available_dataset_paths.keys())
+            unknown_dataset_names = [name for name in selected_dataset_names if name not in available_dataset_paths]
+            if unknown_dataset_names:
+                valid_names = ", ".join(sorted(available_dataset_paths.keys()))
+                raise ValueError(
+                    f"Unknown eval_datasets value(s): {', '.join(unknown_dataset_names)}. "
+                    f"Valid options are: {valid_names}."
+                )
+            dataset_paths = [available_dataset_paths[name] for name in selected_dataset_names]
             evaluate_models_on_datasets(
                 dataset_paths=dataset_paths,
                 eval_model_names=config.generation.eval_models,

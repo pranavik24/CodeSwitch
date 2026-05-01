@@ -31,11 +31,23 @@ def main() -> None:
         default=None,
         help="Override the number of sampled prompts and final generated examples per dataset.",
     )
+    parser.add_argument(
+        "--eval-datasets",
+        default=None,
+        help=(
+            "Comma-separated dataset names to score during evaluate/all. "
+            "Options: control_eng,unfinetuned_engesp,finetuned_engesp."
+        ),
+    )
     args = parser.parse_args()
+    eval_datasets = None
+    if args.eval_datasets:
+        eval_datasets = [item.strip() for item in args.eval_datasets.split(",") if item.strip()]
     run_stage(
         stage=args.stage,
         config_path=args.config,
         num_samples=args.num_samples,
+        eval_datasets=eval_datasets,
     )
 
 
